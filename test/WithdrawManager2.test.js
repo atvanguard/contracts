@@ -1,5 +1,6 @@
 import chai from 'chai'
 import chaiAsPromised from 'chai-as-promised'
+import fs from 'fs'
 
 import deployer from './helpers/deployer.js'
 import logDecoder from './helpers/log-decoder.js'
@@ -43,19 +44,29 @@ contract('WithdrawManager', async function(accounts) {
     const user = accounts[0].toLowerCase()
     await deposit(contracts.depositManager, childContracts.childChain, childContracts.rootERC20, sender, amount)
 
-    let { receipt } = await childContracts.childToken.transfer(user, amount)
-    receipt = await web3Child.eth.getTransactionReceipt(receipt.transactionHash)
-    console.log(JSON.parse(JSON.stringify(receipt)))
+    let { receipt } = await childContracts.childToken.transfer(user, amount, {from: sender})
+    writeToFile(
+      'transfer.js',
+      await web3Child.eth.getTransaction(receipt.transactionHash),
+      await web3Child.eth.getTransactionReceipt(receipt.transactionHash),
+      await web3Child.eth.getBlock(receipt.blockHash, true /* returnTransactionObjects */),
+    )
 
-    // receipt = await childContracts.childToken.withdraw(amount).receipt
-    // console.log(JSON.parse(JSON.stringify(receipt)))
+    const _withdrawTx = await childContracts.childToken.withdraw(amount)
+    receipt = _withdrawTx.receipt
+    writeToFile(
+      'withdraw.js',
+      await web3Child.eth.getTransaction(receipt.transactionHash),
+      await web3Child.eth.getTransactionReceipt(receipt.transactionHash),
+      await web3Child.eth.getBlock(receipt.blockHash, true /* returnTransactionObjects */),
+    )
     // const withdrawTx = await web3Child.eth.getTransaction(receipt.transactionHash)
-    // // console.log(JSON.parse(JSON.stringify(withdrawTx)))
+    // writeToFile('withdrawTx.js', withdrawTx)
     // const withdrawReceipt = await web3Child.eth.getTransactionReceipt(receipt.transactionHash)
-    // // console.log(JSON.parse(JSON.stringify(withdrawReceipt)))
+    // writeToFile('withdrawReceipt.js', withdrawReceipt)
 
     // const withdrawBlock = await web3Child.eth.getBlock(receipt.blockHash, true /* returnTransactionObjects */)
-    // console.log(JSON.parse(JSON.stringify(withdrawBlock)))
+    // writeToFile('withdrawBlock.js', withdrawBlock)
     // const blockHeader = getBlockHeader(withdrawBlock)
     // const headers = [blockHeader]
     // const tree = new MerkleTree(headers)
@@ -146,4 +157,12 @@ async function deposit(depositManager, childChain, rootERC20, user, amount) {
   const NewDepositBlockEvent = logs.find(log => log.event == 'NewDepositBlock')
   await childChain.depositTokens(
     rootERC20.address, user, amount, NewDepositBlockEvent.args.depositBlockId)
+}
+
+function writeToFile(file, tx, receipt, block) {
+  const r = { tx, receipt, block }
+  fs.writeFileSync(
+    `./test/mocks/mockResponses/${file}`,
+    `module.exports = ${JSON.stringify(r, null, 4)}`
+  )
 }
