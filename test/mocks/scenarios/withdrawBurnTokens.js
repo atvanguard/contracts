@@ -3,55 +3,18 @@ const assert = require('assert')
 
 const WithdrawManager = require('../WithdrawManager')
 const withdrawManager = new WithdrawManager()
-const transferTx = require('../mockResponses/transferTx')
-const withdrawTx = require('../mockResponses/withdrawTx')
-const withdrawReceipt = require('../mockResponses/withdrawReceipt')
-const withdrawBlock = require('../mockResponses/withdrawBlock')
+const transfer = require('../mockResponses/transfer')
+const withdraw = require('../mockResponses/withdraw')
 
 const getBlockHeader = require('../../helpers/blocks').getBlockHeader
 const MerkleTree = require('../../helpers/merkle-tree')
 const Proofs = require('../../helpers/proofs')
 
 async function withdrawBurntTokens() {
-  const blockHeader = getBlockHeader(withdrawBlock)
-  const headers = [blockHeader]
-  const tree = new MerkleTree(headers)
-  const root = utils.bufferToHex(tree.getRoot())
-  const start = withdrawTx.blockNumber
-  const end = withdrawTx.blockNumber
-  const withdrawBlockProof = await tree.getProof(blockHeader)
-
-  const txProof = await Proofs.getTxProof(withdrawTx, withdrawBlock)
-  const receiptProof = await Proofs.getReceiptProof(withdrawReceipt, withdrawBlock, [withdrawReceipt])
-  const inputTx = {
-    header: { root: tree.getRoot(), start: transferTx.blockNumber }
-  }
-  // console.log('blockHeader 1', blockHeader)
-  // console.log(blockHeader,
-  //     withdrawBlock.number - start,
-  //     tree.getRoot(),
-  //     withdrawBlockProof)
-  // assert.ok(
-  //   tree.verify(
-  //     blockHeader,
-  //     withdrawBlock.number - start,
-  //     tree.getRoot(),
-  //     withdrawBlockProof
-  //   ),
-  //   "Check membership failed"
-  // )
-  await withdrawManager.withdrawBurntTokens(
-    txProof, receiptProof,
-    withdrawBlock.number, withdrawBlock.timestamp, withdrawBlock.transactionsRoot, withdrawBlock.receiptsRoot, withdrawBlockProof,
-    {start, root}
-  )
-  // console.log(blockHeader, withdrawBlock.number - start, tree.getRoot(), withdrawBlockProof)
-  // const headerNumber = 10000;
-  // const headerRoot = utils.bufferToHex(tree.getRoot())
-  // const startBlock =
-  // await withdrawManager.checkInclusion(headerRoot, start, withdrawBlockProof, withdrawBlock.number,
-  //   withdrawBlock.timestamp, withdrawBlock.transactionsRoot, withdrawBlock.receiptsRoot
-  // )
+  const inputTx = await build(transfer)
+  const exitTx = await build(withdraw)
+  await withdrawManager.withdrawBurntTokens(inputTx, exitTx)
+  // await withdrawManager.withdrawBurntTokens(inputTx)
   // await withdrawManager.withdrawBurntTokens(
   //   headerNumber,
   //   // utils.bufferToHex(Buffer.concat(withdrawBlockProof)),
@@ -68,6 +31,28 @@ async function withdrawBurntTokens() {
   //   user,
   //   { receiptProof, rootChain: contracts.rootChain }
   // )
+}
+
+let headerNumber = 0
+
+async function build(transfer) {
+  let blockHeader = getBlockHeader(transfer.block)
+  let tree = new MerkleTree([blockHeader])
+  let receiptProof = await Proofs.getReceiptProof(transfer.receipt, transfer.block, [transfer.receipt])
+  Proofs.verifyTxProof(receiptProof)
+  headerNumber += 1
+  return {
+    header: { number: headerNumber, root: tree.getRoot(), start: transfer.receipt.blockNumber },
+    receipt: Proofs.getReceiptBytes(transfer.receipt), // rlp encoded
+    tx: Proofs.getTxBytes(transfer.receipt), // rlp encoded
+    receiptParentNodes: receiptProof.parentNodes,
+    path: receiptProof.path,
+    number: transfer.receipt.blockNumber,
+    timestamp: transfer.block.timestamp,
+    transactionsRoot: transfer.block.transactionsRoot,
+    receiptsRoot: Buffer.from(transfer.block.receiptsRoot.slice(2), 'hex'),
+    proof: await tree.getProof(blockHeader)
+  }
 }
 
 withdrawBurntTokens()

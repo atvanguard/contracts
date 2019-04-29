@@ -10,3 +10,4 @@ test-blockchain/data/**
 *.log
 
 .DS_Store
+test/mocks/mockResponses
