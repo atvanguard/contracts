@@ -1,58 +1,70 @@
 const utils = require('ethereumjs-util')
 const assert = require('assert')
 
-const WithdrawManager = require('../WithdrawManager')
-const withdrawManager = new WithdrawManager()
+const WithdrawManager = require('../WithdrawManager').WithdrawManager
+const TxType = require('../WithdrawManager').TxType
+
+const deposit = require('../mockResponses/deposit')
+const depositBurnReceipt = require('../mockResponses/deposit-burn')
+const incomingTransfer = require('../mockResponses/incomingTransfer')
+const burn = require('../mockResponses/burn')
 const transfer = require('../mockResponses/transfer')
-const withdraw = require('../mockResponses/withdraw')
+const partialBurn = require('../mockResponses/partialBurn')
 
 const getBlockHeader = require('../../helpers/blocks').getBlockHeader
 const MerkleTree = require('../../helpers/merkle-tree')
 const Proofs = require('../../helpers/proofs')
 
-async function withdrawBurntTokens() {
-  const inputTx = await build(transfer)
-  const exitTx = await build(withdraw)
-  await withdrawManager.withdrawBurntTokens(inputTx, exitTx)
-  // await withdrawManager.withdrawBurntTokens(inputTx)
-  // await withdrawManager.withdrawBurntTokens(
-  //   headerNumber,
-  //   // utils.bufferToHex(Buffer.concat(withdrawBlockProof)),
-  //   utils.bufferToHex(Buffer.concat(withdrawBlockProof)),
-  //   withdrawBlock.number,
-  //   withdrawBlock.timestamp,
-  //   utils.bufferToHex(withdrawBlock.transactionsRoot),
-  //   utils.bufferToHex(withdrawBlock.receiptsRoot),
-  //   utils.bufferToHex(rlp.encode(receiptProof.path)), // branch mask
-  //   utils.bufferToHex(getTxBytes(withdrawTx)),
-  //   utils.bufferToHex(rlp.encode(txProof.parentNodes)), // Merkle proof of the withdraw transaction
-  //   utils.bufferToHex(getReceiptBytes(withdrawReceipt)),
-  //   utils.bufferToHex(rlp.encode(receiptProof.parentNodes)),
-  //   user,
-  //   { receiptProof, rootChain: contracts.rootChain }
-  // )
+async function incomingTransferFullBurn() {
+  let withdrawManager = new WithdrawManager()
+  const input = await build(incomingTransfer)
+  const exit = await build(burn)
+  await withdrawManager.withdrawBurntTokens(input, TxType.INCOMING_TRANSFER, exit)
+}
+
+async function depositBurn() {
+  let withdrawManager = new WithdrawManager()
+  const input = await build(deposit)
+  const exit = await build(depositBurnReceipt)
+  await withdrawManager.withdrawBurntTokens(input, TxType.DEPOSIT, exit)
+}
+
+async function transferPartialBurn() {
+  let withdrawManager = new WithdrawManager()
+  const input = await build(transfer)
+  const exit = await build(partialBurn)
+  await withdrawManager.withdrawBurntTokens(input, TxType.TRANSFER, exit)
 }
 
 let headerNumber = 0
-
-async function build(transfer) {
-  let blockHeader = getBlockHeader(transfer.block)
+async function build(event) {
+  let blockHeader = getBlockHeader(event.block)
   let tree = new MerkleTree([blockHeader])
-  let receiptProof = await Proofs.getReceiptProof(transfer.receipt, transfer.block, [transfer.receipt])
-  Proofs.verifyTxProof(receiptProof)
+  let receiptProof = await Proofs.getReceiptProof(event.receipt, event.block, [event.receipt])
+  let txProof = await Proofs.getTxProof(event.tx, event.block)
+  // Proofs.verifyTxProof(receiptProof)
   headerNumber += 1
   return {
-    header: { number: headerNumber, root: tree.getRoot(), start: transfer.receipt.blockNumber },
-    receipt: Proofs.getReceiptBytes(transfer.receipt), // rlp encoded
-    tx: Proofs.getTxBytes(transfer.receipt), // rlp encoded
+    header: { number: headerNumber, root: tree.getRoot(), start: event.receipt.blockNumber },
+    receipt: Proofs.getReceiptBytes(event.receipt), // rlp encoded
     receiptParentNodes: receiptProof.parentNodes,
+    // tx: Buffer.from(event.tx.raw.slice(2), 'hex'),
+    tx: Proofs.getTxBytes(event.tx), // rlp encoded
+    txParentNodes: txProof.parentNodes,
     path: receiptProof.path,
-    number: transfer.receipt.blockNumber,
-    timestamp: transfer.block.timestamp,
-    transactionsRoot: transfer.block.transactionsRoot,
-    receiptsRoot: Buffer.from(transfer.block.receiptsRoot.slice(2), 'hex'),
+    number: event.receipt.blockNumber,
+    timestamp: event.block.timestamp,
+    // transactionsRoot: event.block.transactionsRoot,
+    transactionsRoot: Buffer.from(event.block.transactionsRoot.slice(2), 'hex'),
+    receiptsRoot: Buffer.from(event.block.receiptsRoot.slice(2), 'hex'),
     proof: await tree.getProof(blockHeader)
   }
 }
 
-withdrawBurntTokens()
+async function execute() {
+  await incomingTransferFullBurn()
+  await depositBurn()
+  await transferPartialBurn()
+}
+
+execute().then()
