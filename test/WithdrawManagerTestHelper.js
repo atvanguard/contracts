@@ -18,7 +18,7 @@ chai
 contract('WithdrawManager', async function(accounts) {
   let contracts, childContracts
   const user = accounts[0].toLowerCase()
-  const other = accounts[1]//.toLowerCase()
+  const other = accounts[1].toLowerCase()
   const amount = web3.utils.toBN('10')
   // const amount = web3.utils.toBN('10').pow(web3.utils.toBN('18'))
 
@@ -28,7 +28,7 @@ contract('WithdrawManager', async function(accounts) {
   })
 
   it('withdrawBurntTokens - deposit', async function() {
-    await deposit(contracts.depositManager, childContracts.childChain, childContracts.rootERC20, user, amount, true /* writeToFile */)
+    await deposit(contracts.depositManager, childContracts.childChain, childContracts.rootERC20, user, amount, 'deposit.js' /* writeToFile */)
     let _withdrawTx = await childContracts.childToken.withdraw(amount)
     await writeToFile('deposit-burn.js', _withdrawTx.receipt)
   })
@@ -45,7 +45,7 @@ contract('WithdrawManager', async function(accounts) {
     // user is left with 3 token
   })
 
-  it.only('withdrawBurntTokens - incomingTransfer - burn', async function() {
+  it('withdrawBurntTokens - incomingTransfer - burn', async function() {
     await deposit(contracts.depositManager, childContracts.childChain, childContracts.rootERC20, other, amount)
 
     let _transferTx = await childContracts.childToken.transfer(user, amount, {from: other})
@@ -55,16 +55,22 @@ contract('WithdrawManager', async function(accounts) {
     let _withdrawTx = await childContracts.childToken.withdraw(amount) // full burn
     await writeToFile('burn.js', _withdrawTx.receipt)
   })
+
+  it.only('exitInFlight - depositTransferInFlight', async function() {
+    await deposit(contracts.depositManager, childContracts.childChain, childContracts.rootERC20, user, amount, 'exitInFlight-deposit.js')
+    let _transferTx = await childContracts.childToken.transfer(other, web3.utils.toBN('3'))
+    await writeToFile('exitInFlight-transfer.js', _transferTx.receipt)
+  })
 })
 
-async function deposit(depositManager, childChain, rootERC20, user, amount, _writeToFile) {
+async function deposit(depositManager, childChain, rootERC20, user, amount, file) {
   await rootERC20.approve(depositManager.address, amount)
   const result = await depositManager.depositERC20ForUser(rootERC20.address, user, amount)
   const logs = logDecoder.decodeLogs(result.receipt.rawLogs)
   const NewDepositBlockEvent = logs.find(log => log.event === 'NewDepositBlock')
   let { receipt } = await childChain.depositTokens(
     rootERC20.address, user, amount, NewDepositBlockEvent.args.depositBlockId)
-  if (_writeToFile) writeToFile('deposit.js', receipt)
+  if (file) writeToFile(file, receipt)
 }
 
 async function writeToFile(file, receipt) {

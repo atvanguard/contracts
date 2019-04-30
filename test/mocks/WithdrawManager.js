@@ -40,6 +40,7 @@ class WithdrawManager {
     inputItems = inputItems[3][1]
 
     const childToken = inputItems[0]
+    console.log('childToken', childToken.toString('hex'))
     assert.ok(
       childToken.equals(exitItems[0]), // corresponds to "to" field in receipt
       'Input and exit tx do not correspond to the same token'
@@ -104,21 +105,17 @@ class WithdrawManager {
         inputData.slice(64).equals(exitData.slice(32, 64)),
         'Input tx is not a deposit tx'
       )
+      const depositor = inputItems[2].slice(12)
+      assert.ok(
+        depositor.equals(exitor), // && sender.equals(msg.sender)
+        'Exitor is not the sender of the input tx'
+      )
     }
 
     const amountOrTokenId = exitData.slice(0, 32).toString('hex') // the next 32 + 32 bytes are input1 and output1
 
     // **** assertions on tx ***
-    const exitTx = utils.rlp.decode(exit.tx)
-    const rawTx = exitTx.slice()
-    rawTx[6] = Buffer.from('0d', 'hex')
-    rawTx[7] = Buffer.from('', 'hex')
-    rawTx[8] = Buffer.from('', 'hex')
-
-    const sender = utils.pubToAddress(utils.ecrecover(
-      utils.rlphash(rawTx), parseInt(exitTx[6].toString('hex'), 16), exitTx[7], exitTx[8], 13 // network id
-    ))
-
+    const sender = this.getAddressFromTx(utils.rlp.decode(exit.tx))
     assert.ok(
       exitor.equals(sender), // && sender.equals(msg.sender)
       'Tx signer is not exitor'
@@ -128,6 +125,96 @@ class WithdrawManager {
     const exitId = this.getExitId(input.header.number, input.number, input.path, 0)
     const exitObject = { rootToken: rootToken.toString('hex'), amountOrTokenId, owner: exitor.toString('hex'), burnt: true }
     this._addExitToQueue(exitObject, exitId)
+  }
+
+  async exitInFlight(input, inputTxType, exit, exitTxType) {
+    let inputItems = this.verifyReceiptAndTx(input)
+    inputItems = inputItems[3][1]
+
+    let exitTx = utils.rlp.decode(exit)
+    exitTx.forEach(e => console.log(e.toString('hex')))
+    const childToken = inputItems[0]
+    assert.ok(
+      childToken.equals(exitTx[3]), // corresponds to "to" field in receipt
+      'Input and exit tx do not correspond to the same token'
+    )
+    // items[2] correspondes to "data" field in receipt
+    const inputData = inputItems[2]
+    inputItems = inputItems[1] // 1st log (0-based) - LogTransfer
+    // now, inputItems[i] refers to i-th (0-based) topic in the topics array
+    const funcSig = exitTx[5].slice(0, 4)
+    const amount = exitTx[5].slice(-32)
+    assert.ok(
+      funcSig.equals(utils.keccak256('transfer(address,uint256)').slice(0, 4)),
+      'funcSig doesnt match with transfer tx'
+    )
+    const rootToken = inputItems[1].slice(12)
+    console.log('rootToken', rootToken.toString('hex'))
+    // assert root to child token mapping from the registry
+
+    const exitor = this.getAddressFromTx(exitTx)
+
+    if (inputTxType === TxType.INCOMING_TRANSFER) {
+      // event LogTransfer(
+      //   address indexed token, address indexed from, address indexed to,
+      //   uint256 amountOrTokenId, uint256 input1, uint256 input2, uint256 output1, uint256 output2);
+      assert.ok(
+        inputItems[0].toString('hex') === 'e6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4',
+        'LOG_TRANSFER_EVENT_SIGNATURE_NOT_FOUND'
+      )
+      // verify that closing balance of the inputTx is the opening balance of the exit
+      assert.ok(
+        inputData.slice(-32).equals(exitData.slice(32, 64)),
+        'Input tx is not an incoming transfer'
+      )
+      const receiver = inputItems[3].slice(12)
+      assert.ok(
+        receiver.equals(exitor), // && sender.equals(msg.sender)
+        'Exitor is not the receiver of the input tx'
+      )
+    } else if (inputTxType === TxType.TRANSFER) {
+      assert.ok(
+        inputItems[0].toString('hex') === 'e6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4',
+        'LOG_TRANSFER_EVENT_SIGNATURE_NOT_FOUND'
+      )
+      assert.ok(
+        inputData.slice(96, 128).equals(exitData.slice(32, 64)),
+        'Input tx is not an outgoing transfer'
+      )
+      const sender = inputItems[2].slice(12)
+      assert.ok(
+        sender.equals(exitor), // && sender.equals(msg.sender)
+        'Exitor is not the sender of the input tx'
+      )
+    } else if (inputTxType === TxType.DEPOSIT) {
+      console.log('in TxType.DEPOSIT')
+      // event Deposit(address indexed token, address indexed from, uint256 amountOrTokenId, uint256 input1, uint256 output1);
+      assert.ok(
+        inputItems[0].toString('hex') === '4e2ca0515ed1aef1395f66b5303bb5d6f1bf9d61a353fa53f73f8ac9973fa9f6',
+        'DEPOSIT_EVENT_SIGNATURE_NOT_FOUND'
+      )
+      assert.ok(
+        inputData.slice(64).compare(amount) <= 1,
+        'Input tx balance is less than that being transferred'
+      )
+      const depositor = inputItems[2].slice(12)
+      assert.ok(
+        depositor.equals(exitor), // && sender.equals(msg.sender)
+        'Exitor is not the sender of the input tx'
+      )
+      console.log('in TxType.DEPOSIT 2')
+    }
+  }
+
+  getAddressFromTx(tx) { // rlp decoded
+    const rawTx = tx.slice()
+    rawTx[6] = Buffer.from('0d', 'hex')
+    rawTx[7] = Buffer.from('', 'hex')
+    rawTx[8] = Buffer.from('', 'hex')
+
+    return utils.pubToAddress(utils.ecrecover(
+      utils.rlphash(rawTx), parseInt(tx[6].toString('hex'), 16), tx[7], tx[8], 13 // network id
+    ))
   }
 
   verifyReceiptAndTx(input) {
