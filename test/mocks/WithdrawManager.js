@@ -58,6 +58,8 @@ class WithdrawManager {
       'WITHDRAW_EVENT_SIGNATURE_NOT_FOUND'
     )
     const rootToken = exitItems[1].slice(12)
+    // console.log('rootToken', rootToken.toString('hex'))
+    // assert root to child token mapping from the registry
 
     const exitor = exitItems[2].slice(12)
     if (inputTxType === TxType.INCOMING_TRANSFER) {
@@ -106,17 +108,12 @@ class WithdrawManager {
 
     const amountOrTokenId = exitData.slice(0, 32).toString('hex') // the next 32 + 32 bytes are input1 and output1
 
-    // console.log('rootToken', rootToken.toString('hex'))
-    // assert root to child token mapping from the registry
-
     // **** assertions on tx ***
     const exitTx = utils.rlp.decode(exit.tx)
     const rawTx = exitTx.slice()
     rawTx[6] = Buffer.from('0d', 'hex')
     rawTx[7] = Buffer.from('', 'hex')
     rawTx[8] = Buffer.from('', 'hex')
-
-    // console.log(utils.keccak256(exit.tx).toString('hex'))
 
     const sender = utils.pubToAddress(utils.ecrecover(
       utils.rlphash(rawTx), parseInt(exitTx[6].toString('hex'), 16), exitTx[7], exitTx[8], 13 // network id
@@ -127,10 +124,8 @@ class WithdrawManager {
       'Tx signer is not exitor'
     )
 
-    // console.log(sender.toString('hex'))
     // calculate exit ID
     const exitId = this.getExitId(input.header.number, input.number, input.path, 0)
-    // console.log(exitId.toNumber())
     const exitObject = { rootToken: rootToken.toString('hex'), amountOrTokenId, owner: exitor.toString('hex'), burnt: true }
     this._addExitToQueue(exitObject, exitId)
   }
