@@ -56,10 +56,20 @@ contract('WithdrawManager', async function(accounts) {
     await writeToFile('burn.js', _withdrawTx.receipt)
   })
 
-  it.only('exitInFlight - depositTransferInFlight', async function() {
-    await deposit(contracts.depositManager, childContracts.childChain, childContracts.rootERC20, user, amount, 'exitInFlight-deposit.js')
-    let _transferTx = await childContracts.childToken.transfer(other, web3.utils.toBN('3'))
-    await writeToFile('exitInFlight-transfer.js', _transferTx.receipt)
+  describe('exitInFlight', async function() {
+    it('depositTransferInFlight', async function() {
+      await deposit(contracts.depositManager, childContracts.childChain, childContracts.rootERC20, user, amount, 'exitInFlight-deposit.js')
+      let _transferTx = await childContracts.childToken.transfer(other, web3.utils.toBN('3'))
+      await writeToFile('exitInFlight/transfer.js', _transferTx.receipt)
+    })
+
+    it.only('counterPartyDepositAnd Transfer (or burn ) InFlight', async function() {
+      await deposit(contracts.depositManager, childContracts.childChain, childContracts.rootERC20, other, amount, 'exitInFlight/counterparty-deposit.js')
+      let _transferTx = await childContracts.childToken.transfer(user, amount, {from: other})
+      await writeToFile('exitInFlight/counterparty-transfer.js', _transferTx.receipt)
+      let _withdrawTx = await childContracts.childToken.withdraw(amount) // full burn
+      await writeToFile('exitInFlight/burn.js', _withdrawTx.receipt)
+    })
   })
 })
 

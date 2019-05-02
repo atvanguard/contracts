@@ -19,7 +19,7 @@ async function incomingTransferFullBurn() {
   let withdrawManager = new WithdrawManager()
   const input = await build(incomingTransfer)
   const exit = await build(burn)
-  await withdrawManager.withdrawBurntTokens(input, TxType.INCOMING_TRANSFER, exit)
+  await withdrawManager.withdrawBurntTokens(input, TxType.COUNTERPARTY_TRANSFER, exit)
 }
 
 async function depositBurn() {
