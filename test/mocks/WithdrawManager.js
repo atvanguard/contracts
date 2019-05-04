@@ -35,183 +35,145 @@ class WithdrawManager {
     this.options = options
   }
 
-  async withdrawBurntTokens(input, inputTxType, exit) {
-    let exitItems = this.verifyReceiptAndTx(exit)
-    exitItems = exitItems[3][1]
-    let inputItems = this.verifyReceiptAndTx(input)
-    inputItems = inputItems[3][1]
-
-    const childToken = inputItems[0]
-    console.log('childToken', childToken.toString('hex'))
+  async startExit(input, inputTxType, exit, msgSender) {
+    console.log(msgSender.toString('hex'))
+    const { childToken, rootToken, inputTxClosingBalance, exitor, counterParty, exitId } = this.processReferenceTx(input, inputTxType)
+    // in COUNTERPARTY_DEPOSIT case, counterParty would be populated but not exitor
+    if (exitor) {
+      assert.ok(
+        exitor.equals(msgSender),
+        'Exitor is not a party to the exit tx'
+      )
+    }
+    const { _counterParty, exitAmount, burnt, token } = this.processExitTx(exit, inputTxClosingBalance, msgSender)
+    if (inputTxType === TxType.COUNTERPARTY_DEPOSIT) {
+      // then exit tx is COUNTERPARTY_TRANSFER
+      assert.ok(
+        counterParty.equals(_counterParty),
+        'Exitor is not a party to the exit tx'
+      )
+    }
     assert.ok(
-      childToken.equals(exitItems[0]), // corresponds to "to" field in receipt
+      childToken.equals(token),
       'Input and exit tx do not correspond to the same token'
     )
-    // items[2] correspondes to "data" field in receipt
-    const inputData = inputItems[2]
-    const exitData = exitItems[2]
+    // assert rootToken to childToken mapping
 
-    inputItems = inputItems[1] // 1st log (0-based) - LogTransfer
-    // now, inputItems[i] refers to i-th (0-based) topic in the topics array
-
-    exitItems = exitItems[1] // 1st log (0-based) - Withdraw
-    // now, exitItems[i] refers to i-th (0-based) topic in the topics array
-    assert.ok(
-      exitItems[0].toString('hex') === 'ebff2602b3f468259e1e99f613fed6691f3a6526effe6ef3e768ba7ae7a36c4f',
-      'WITHDRAW_EVENT_SIGNATURE_NOT_FOUND'
-    )
-    const rootToken = exitItems[1].slice(12)
-    // console.log('rootToken', rootToken.toString('hex'))
-    // assert root to child token mapping from the registry
-
-    const exitor = exitItems[2].slice(12)
-    // assert.ok(exitor.equals(msg.sender))
-    let inputTxBalance
-
-    if (inputTxType === TxType.COUNTERPARTY_TRANSFER) {
-      // event LogTransfer(
-      //   address indexed token, address indexed from, address indexed to,
-      //   uint256 amountOrTokenId, uint256 input1, uint256 input2, uint256 output1, uint256 output2);
-      this.assertIncomingTransfer(inputItems[0], inputItems[3].slice(12), exitor)
-      inputTxBalance = inputData.slice(-32)
-    } else if (inputTxType === TxType.TRANSFER) {
-      this.assertTransfer(inputItems[0], inputItems[2].slice(12), exitor)
-      inputTxBalance = inputData.slice(96, 128)
-    } else if (inputTxType === TxType.DEPOSIT) {
-      // event Deposit(address indexed token, address indexed from, uint256 amountOrTokenId, uint256 input1, uint256 output1);
-      this.assertDeposit(inputItems[0], inputData.slice(64), exitData.slice(32, 64), 'e', inputItems[2].slice(12), exitor)
-      inputTxBalance = inputData.slice(64)
-    }
-    let exitTxOpeningBalance = exitData.slice(32, 64)
-    this.assertEquality(inputTxBalance, exitTxOpeningBalance)
-
-    const amountOrTokenId = exitData.slice(0, 32) // the next 32 + 32 bytes are input1 and output1
-
-    // **** assertions on tx ***
-    const sender = this.getAddressFromTx(utils.rlp.decode(exit.tx))
-    assert.ok(
-      exitor.equals(sender), // && sender.equals(msg.sender)
-      'Tx signer is not exitor'
-    )
-
-    // calculate exit ID
-    const exitId = this.getExitId(input.header.number, input.number, input.path, 0)
-    const exitObject = { rootToken: rootToken.toString('hex'), amountOrTokenId, owner: exitor.toString('hex'), burnt: true }
+    const exitObject = { rootToken: rootToken.toString('hex'), amountOrTokenId: exitAmount, owner: msgSender.toString('hex'), burnt }
     this._addExitToQueue(exitObject, exitId)
   }
 
-  async exitInFlight(input, inputTxType, exit, exitTxType) {
+  processReferenceTx(input, inputTxType) {
     let inputItems = this.verifyReceiptAndTx(input)
     inputItems = inputItems[3][1]
-
-    let exitTx = utils.rlp.decode(exit)
-    // exitTx.forEach(e => console.log(e.toString('hex')))
-
     const childToken = inputItems[0]
-    assert.ok(
-      childToken.equals(exitTx[3]), // corresponds to "to" field in tx
-      'Input and exit tx do not correspond to the same token'
-    )
+
     // items[2] correspondes to "data" field in receipt
     const inputData = inputItems[2]
     inputItems = inputItems[1] // 1st log (0-based) - LogTransfer
     // now, inputItems[i] refers to i-th (0-based) topic in the topics array
     const rootToken = inputItems[1].slice(12)
-    // assert root to child token mapping from the registry
 
-    const exitor = this.getAddressFromTx(exitTx)
-    let inputTxBalance
-    if (inputTxType === TxType.COUNTERPARTY_TRANSFER) {
-      // event LogTransfer(
-      //   address indexed token, address indexed from, address indexed to,
-      //   uint256 amountOrTokenId, uint256 input1, uint256 input2, uint256 output1, uint256 output2);
-      this.assertIncomingTransfer(inputItems[0], inputItems[3].slice(12), exitor)
-      inputTxBalance = inputData.slice(-32)
-    } else if (inputTxType === TxType.TRANSFER) {
-      this.assertTransfer(inputItems[0], inputItems[2].slice(12), exitor)
-      inputTxBalance = inputData.slice(96, 128)
-    } else if (inputTxType === TxType.DEPOSIT) {
+    let exitor, counterParty, inputTxClosingBalance
+
+    if (inputTxType === TxType.DEPOSIT) {
       // event Deposit(address indexed token, address indexed from, uint256 amountOrTokenId, uint256 input1, uint256 output1);
-      this.assertDeposit(inputItems[0], inputItems[2].slice(12), exitor)
-      inputTxBalance = inputData.slice(64)
+      this.assertDeposit(inputItems[0] /* eventSig */)
+      inputTxClosingBalance = inputData.slice(64) // output1
+      exitor = inputItems[2]
     } else if (inputTxType === TxType.COUNTERPARTY_DEPOSIT) {
       assert.ok(
         inputItems[0].toString('hex') === '4e2ca0515ed1aef1395f66b5303bb5d6f1bf9d61a353fa53f73f8ac9973fa9f6',
         'DEPOSIT_EVENT_SIGNATURE_NOT_FOUND'
       )
-      inputTxBalance = inputData.slice(64)
+      inputTxClosingBalance = inputData.slice(64)
+      counterParty = inputItems[2].slice(12)
+    } else if (inputTxType === TxType.TRANSFER) {
+      // event LogTransfer(
+      //   address indexed token, address indexed from, address indexed to,
+      //   uint256 amountOrTokenId, uint256 input1, uint256 input2, uint256 output1, uint256 output2);
+      this.assertTransfer(inputItems[0])
+      inputTxClosingBalance = inputData.slice(96, 128) // output1
+      exitor = inputItems[2]
+    } else if (inputTxType === TxType.COUNTERPARTY_TRANSFER) {
+      this.assertIncomingTransfer(inputItems[0])
+      inputTxClosingBalance = inputData.slice(-32) // output2
+      exitor = inputItems[3] // to
+    } else if (inputTxType === TxType.BURN) {
+      // event Withdraw(address indexed token, address indexed from, uint256 amountOrTokenId, uint256 input1, uint256 output1
+      inputTxClosingBalance = inputData.slice(-32) // output1
+      exitor = inputItems[2]
     }
-
-    // **** assertions on exit tx ***
-    const funcSig = exitTx[5].slice(0, 4)
-    const amountOrTokenId = exitTx[5].slice(-32)
-    if (exitTxType === TxType.TRANSFER) {
-      assert.ok(
-        funcSig.equals(utils.keccak256('transfer(address,uint256)').slice(0, 4)),
-        'funcSig doesnt match with transfer tx'
-      )
-    } else if (exitTxType === TxType.COUNTERPARTY_TRANSFER) {
-      assert.ok(
-        funcSig.equals(utils.keccak256('transfer(address,uint256)').slice(0, 4)),
-        'funcSig doesnt match with transfer tx'
-      )
-    } else if (exitTxType === TxType.BURN) {
-      assert.ok(
-        funcSig.equals(utils.keccak256('withdraw(uint256)').slice(0, 4)),
-        'funcSig doesnt match with withdraw tx'
-      )
-    }
-    this.assertLte(inputTxBalance, amountOrTokenId)
-
     const exitId = this.getExitId(input.header.number, input.number, input.path, 0)
-    const exitObject = { rootToken: rootToken.toString('hex'), amountOrTokenId, owner: exitor.toString('hex'), burnt: true }
-    this._addExitToQueue(exitObject, exitId)
+    if (exitor) exitor = exitor.slice(12)
+    return { childToken, rootToken, inputTxClosingBalance, exitor, counterParty, exitId }
   }
 
-  assertIncomingTransfer(eventSig, receiver, exitor) {
+  processExitTx(exit, inputTxClosingBalance, msgSender) {
+    let exitTx = utils.rlp.decode(exit)
+    // exitTx.forEach(e => console.log(e.toString('hex')))
+    const token = exitTx[3] // corresponds to "to" field in tx
+    const funcSig = exitTx[5].slice(0, 4)
+    const amount = parseInt(exitTx[5].slice(-32).toString('hex'), 16)
+    inputTxClosingBalance = parseInt(inputTxClosingBalance.toString('hex'), 16)
+
+    const txSender = this.getAddressFromTx(exitTx)
+    // const exitor = this.getAddressFromTx(exitTx)
+    let exitAmount, burnt, _counterParty
+    if (funcSig.equals(utils.keccak256('transfer(address,uint256)').slice(0, 4))) {
+      // can be either incoming or outgoing transfer
+      if (txSender.equals(msgSender)) {
+        // outgoing transfer
+        exitAmount = inputTxClosingBalance - amount
+      } else if (exitTx[5].slice(16, 36).equals(msgSender) /* 1st parameter in transfer function call */) {
+        // incoming transfer
+        exitAmount = inputTxClosingBalance + amount
+        _counterParty = txSender
+      } else {
+        assert.ok(false, 'The exit tx doesnt concern the exitor (msg.sender)')
+      }
+    } else if (funcSig.equals(utils.keccak256('withdraw(uint256)').slice(0, 4))) {
+      assert.ok(
+        txSender.equals(msgSender),
+        'Transfer tx is not signed by the exitor (msg.sender)'
+      )
+      exitAmount = amount // exit with the amount burnt
+      burnt = true
+    } else {
+      assert.ok(false, 'Exit tx type not supported')
+    }
+    return { _counterParty, exitAmount, burnt, token }
+  }
+
+  assertIncomingTransfer(eventSig) {
     assert.ok(
       eventSig.toString('hex') === 'e6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4',
       'LOG_TRANSFER_EVENT_SIGNATURE_NOT_FOUND'
     )
-    assert.ok(
-      receiver.equals(exitor),
-      'Exitor is not the receiver of the input tx'
-    )
   }
 
-  assertTransfer(eventSig, sender, exitor) {
+  assertTransfer(eventSig) {
     assert.ok(
       eventSig.toString('hex') === 'e6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4',
       'LOG_TRANSFER_EVENT_SIGNATURE_NOT_FOUND'
     )
-    assert.ok(
-      sender.equals(exitor),
-      'Exitor is not the sender of the input tx'
-    )
   }
 
-  assertDeposit(eventSig, depositor, exitor) {
+  assertDeposit(eventSig) {
     assert.ok(
       eventSig.toString('hex') === '4e2ca0515ed1aef1395f66b5303bb5d6f1bf9d61a353fa53f73f8ac9973fa9f6',
       'DEPOSIT_EVENT_SIGNATURE_NOT_FOUND'
     )
-    assert.ok(
-      depositor.equals(exitor),
-      'Exitor is not the sender of the input tx'
-    )
   }
 
-  assertLte(amount1, amount2) {
+  assertBurn(eventSig, withdrawer, exitor) {
     assert.ok(
-      amount1.compare(amount2) <= 1,
-      'Input tx closing balance is less than that being transferred'
+      eventSig.toString('hex') === 'ebff2602b3f468259e1e99f613fed6691f3a6526effe6ef3e768ba7ae7a36c4f',
+      'BURN_EVENT_SIGNATURE_NOT_FOUND'
     )
-  }
-
-  assertEquality(amount1, amount2) {
     assert.ok(
-      amount1.compare(amount2) === 0,
-      'Input tx closing balance doesnt match exit tx opening balance'
+      withdrawer.equals(exitor),
+      'Exitor is not the withdrawer of the input tx'
     )
   }
 

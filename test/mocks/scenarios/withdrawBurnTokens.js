@@ -18,22 +18,30 @@ const Proofs = require('../../helpers/proofs')
 async function incomingTransferFullBurn() {
   let withdrawManager = new WithdrawManager()
   const input = await build(incomingTransfer)
-  const exit = await build(burn)
-  await withdrawManager.withdrawBurntTokens(input, TxType.COUNTERPARTY_TRANSFER, exit)
+  const exit = await buildInFlight(burn)
+  const msgSender = Buffer.from(burn.tx.from.slice(2), 'hex')
+  await withdrawManager.startExit(input, TxType.COUNTERPARTY_TRANSFER, exit, msgSender)
 }
 
 async function depositBurn() {
   let withdrawManager = new WithdrawManager()
   const input = await build(deposit)
-  const exit = await build(depositBurnReceipt)
-  await withdrawManager.withdrawBurntTokens(input, TxType.DEPOSIT, exit)
+  const exit = await buildInFlight(depositBurnReceipt)
+  const msgSender = Buffer.from(depositBurnReceipt.tx.from.slice(2), 'hex')
+  await withdrawManager.startExit(input, TxType.DEPOSIT, exit, msgSender)
 }
 
 async function transferPartialBurn() {
   let withdrawManager = new WithdrawManager()
   const input = await build(transfer)
-  const exit = await build(partialBurn)
-  await withdrawManager.withdrawBurntTokens(input, TxType.TRANSFER, exit)
+  const exit = await buildInFlight(partialBurn)
+  const msgSender = Buffer.from(partialBurn.tx.from.slice(2), 'hex')
+  await withdrawManager.startExit(input, TxType.TRANSFER, exit, msgSender)
+}
+
+function buildInFlight(event) {
+  // no receipt, no block
+  return Proofs.getTxBytes(event.tx)
 }
 
 let headerNumber = 0
