@@ -46,4 +46,3 @@ contract LibEIP712Domain {
     return result;
   }
 }
-
