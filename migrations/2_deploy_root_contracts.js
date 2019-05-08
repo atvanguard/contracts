@@ -103,7 +103,7 @@ module.exports = async function(deployer, network) {
         RootChain.address
       )
 
-      // deploy tokens
+      // // deploy tokens
       await deployer.deploy(ExitNFT, Registry.address, 'ExitNFT', 'ENFT')
       await deployer.deploy(MaticWETH)
       await deployer.deploy(RootERC721, 'RootERC721', 'T721')

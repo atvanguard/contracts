@@ -17,25 +17,33 @@ library ECVerify {
     assembly {
       r := mload(add(sig, 32))
       s := mload(add(sig, 64))
-      v := and(mload(add(sig, 65)), 255)
+      v := byte(0, mload(add(sig, 96)))
     }
 
-    // https://github.com/ethereum/go-ethereum/issues/2053
-    if (v < 27) {
-      v += 27;
-    }
+    return ecrecover(hash, v, r, s);
 
-    if (v != 27 && v != 28) {
-      return address(0x0);
-    }
+    // assembly {
+    //   r := mload(add(sig, 32))
+    //   s := mload(add(sig, 64))
+    //   v := and(mload(add(sig, 65)), 255)
+    // }
 
-    // get address out of hash and signature
-    address result = ecrecover(hash, v, r, s);
+    // // https://github.com/ethereum/go-ethereum/issues/2053
+    // if (v < 27) {
+    //   v += 27;
+    // }
 
-    // ecrecover returns zero on error
-    require(result != address(0x0));
+    // if (v != 27 && v != 28) {
+    //   return address(0x0);
+    // }
 
-    return result;
+    // // get address out of hash and signature
+    // address result = ecrecover(hash, v, r, s);
+
+    // // ecrecover returns zero on error
+    // require(result != address(0x0));
+
+    // return result;
   }
 
   function ecrecovery(

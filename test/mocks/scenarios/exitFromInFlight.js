@@ -18,21 +18,21 @@ async function depositTransferInFlight() {
   let withdrawManager = new WithdrawManager()
   const input = await build(deposit)
   const exit = await buildInFlight(transfer)
-  await withdrawManager.startExit(input, TxType.DEPOSIT, exit, Buffer.from(deposit.tx.from.slice(2), 'hex'))
+  await withdrawManager.startExit(input, 1, exit, Buffer.from(deposit.tx.from.slice(2), 'hex'))
 }
 
 async function counterPartyDepositAndTransferInFlight() {
   let withdrawManager = new WithdrawManager()
   const input = await build(counterpartyDeposit)
   const exit = await buildInFlight(counterpartyTransfer)
-  await withdrawManager.startExit(input, TxType.COUNTERPARTY_DEPOSIT, exit, Buffer.from(counterpartyTransfer.tx.input.slice(34, 74), 'hex'))
+  await withdrawManager.startExit(input, 1, exit, Buffer.from(counterpartyTransfer.tx.input.slice(34, 74), 'hex'))
 }
 
 async function counterPartyTransferAndBurnInFlight() {
   let withdrawManager = new WithdrawManager()
   const input = await build(counterpartyTransfer)
   const exit = await buildInFlight(burn)
-  await withdrawManager.startExit(input, TxType.COUNTERPARTY_TRANSFER, exit, Buffer.from(burn.tx.from.slice(2), 'hex'))
+  await withdrawManager.startExit(input, 1, exit, Buffer.from(burn.tx.from.slice(2), 'hex'))
 }
 
 function buildInFlight(event) {

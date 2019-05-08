@@ -9,13 +9,15 @@ const MerkleTree = require('../helpers/merkle-tree')
 const Proofs = require('../helpers/proofs')
 const getBlockHeader = require('../helpers/blocks').getBlockHeader
 
-const TxType = {
-  DEPOSIT: 0,
-  COUNTERPARTY_DEPOSIT: 1,
-  TRANSFER: 2,
-  COUNTERPARTY_TRANSFER: 3,
-  BURN: 4
-}
+// const TxType = {
+//   DEPOSIT: 0,
+//   COUNTERPARTY_DEPOSIT: 1,
+//   TRANSFER: 2,
+//   COUNTERPARTY_TRANSFER: 3,
+//   BURN: 4,
+//   MARKETPLACE_INCOMING: 5,
+//   MARKETPLACE_OUTGOING: 6,
+// }
 
 // const HEADER_BLOCK_NUMBER_WEIGHT = new BN('10').pow(new BN('30'))
 // const WITHDRAW_BLOCK_NUMBER_WEIGHT = new BN('10').pow(new BN('12'))
@@ -35,24 +37,18 @@ class WithdrawManager {
     this.options = options
   }
 
-  async startExit(input, inputTxType, exit, msgSender) {
-    console.log(msgSender.toString('hex'))
-    const { childToken, rootToken, inputTxClosingBalance, exitor, counterParty, exitId } = this.processReferenceTx(input, inputTxType)
-    // in COUNTERPARTY_DEPOSIT case, counterParty would be populated but not exitor
-    if (exitor) {
-      assert.ok(
-        exitor.equals(msgSender),
-        'Exitor is not a party to the exit tx'
-      )
-    }
+  async startExit(input, logIndex, exit, msgSender) {
+    const { childToken, rootToken, inputTxClosingBalance, counterParty, exitId } = this.processReferenceTx(input, logIndex, msgSender)
+    console.log(msgSender)
     const { _counterParty, exitAmount, burnt, token } = this.processExitTx(exit, inputTxClosingBalance, msgSender)
-    if (inputTxType === TxType.COUNTERPARTY_DEPOSIT) {
-      // then exit tx is COUNTERPARTY_TRANSFER
+    // Referencing counterParty deposit and then incoming transfer from that deposit
+    if (counterParty && _counterParty) {
       assert.ok(
         counterParty.equals(_counterParty),
-        'Exitor is not a party to the exit tx'
+        'CounterParty txs do not match'
       )
     }
+    // note that childToken comes from the log referenced; verifying here that the exit tx corresponds to the same token
     assert.ok(
       childToken.equals(token),
       'Input and exit tx do not correspond to the same token'
@@ -63,50 +59,46 @@ class WithdrawManager {
     this._addExitToQueue(exitObject, exitId)
   }
 
-  processReferenceTx(input, inputTxType) {
+  processReferenceTx(input, logIndex, exitor) {
     let inputItems = this.verifyReceiptAndTx(input)
-    inputItems = inputItems[3][1]
-    const childToken = inputItems[0]
-
-    // items[2] correspondes to "data" field in receipt
-    const inputData = inputItems[2]
-    inputItems = inputItems[1] // 1st log (0-based) - LogTransfer
-    // now, inputItems[i] refers to i-th (0-based) topic in the topics array
+    inputItems = inputItems[3][logIndex] // 1st log (0-based) - LogTransfer
+    const childToken = inputItems[0] // "address" (contract address that emitted the log) field in the receipt
+    const inputData = inputItems[2] // "data" field in the receipt
+    // inputItems[i] refers to i-th (0-based) topic in the topics array
+    inputItems = inputItems[1]
     const rootToken = inputItems[1].slice(12)
 
-    let exitor, counterParty, inputTxClosingBalance
+    let counterParty, inputTxClosingBalance
 
-    if (inputTxType === TxType.DEPOSIT) {
+    if (inputItems[0].toString('hex') === '4e2ca0515ed1aef1395f66b5303bb5d6f1bf9d61a353fa53f73f8ac9973fa9f6') {
       // event Deposit(address indexed token, address indexed from, uint256 amountOrTokenId, uint256 input1, uint256 output1);
-      this.assertDeposit(inputItems[0] /* eventSig */)
+      if (!exitor.equals(inputItems[2].slice(12))) {
+        // referencing counterparty deposit
+        counterParty = inputItems[2].slice(12)
+      }
       inputTxClosingBalance = inputData.slice(64) // output1
-      exitor = inputItems[2]
-    } else if (inputTxType === TxType.COUNTERPARTY_DEPOSIT) {
-      assert.ok(
-        inputItems[0].toString('hex') === '4e2ca0515ed1aef1395f66b5303bb5d6f1bf9d61a353fa53f73f8ac9973fa9f6',
-        'DEPOSIT_EVENT_SIGNATURE_NOT_FOUND'
-      )
-      inputTxClosingBalance = inputData.slice(64)
-      counterParty = inputItems[2].slice(12)
-    } else if (inputTxType === TxType.TRANSFER) {
+    } else if (inputItems[0].toString('hex') === 'e6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4') {
       // event LogTransfer(
       //   address indexed token, address indexed from, address indexed to,
       //   uint256 amountOrTokenId, uint256 input1, uint256 input2, uint256 output1, uint256 output2);
-      this.assertTransfer(inputItems[0])
-      inputTxClosingBalance = inputData.slice(96, 128) // output1
-      exitor = inputItems[2]
-    } else if (inputTxType === TxType.COUNTERPARTY_TRANSFER) {
-      this.assertIncomingTransfer(inputItems[0])
-      inputTxClosingBalance = inputData.slice(-32) // output2
-      exitor = inputItems[3] // to
-    } else if (inputTxType === TxType.BURN) {
+      if (exitor.equals(inputItems[2].slice(12))) { // from
+        // If from and to are same, that tx will also get picked here
+        inputTxClosingBalance = inputData.slice(96, 128) // output1
+      } else if (exitor.equals(inputItems[3].slice(12))) { // to
+        inputTxClosingBalance = inputData.slice(-32) // output2
+      } else {
+        assert.ok(false, 'Transfer tx doesnt concern the exitor')
+      }
+    } else if (inputItems[0].toString('hex') === 'ebff2602b3f468259e1e99f613fed6691f3a6526effe6ef3e768ba7ae7a36c4f') {
       // event Withdraw(address indexed token, address indexed from, uint256 amountOrTokenId, uint256 input1, uint256 output1
+      assert.ok(exitor.equals(inputItems[2]), 'Burn tx doesnt concern the exitor')
       inputTxClosingBalance = inputData.slice(-32) // output1
-      exitor = inputItems[2]
+    } else {
+      assert.ok(false, 'Exit type not supported')
     }
     const exitId = this.getExitId(input.header.number, input.number, input.path, 0)
-    if (exitor) exitor = exitor.slice(12)
-    return { childToken, rootToken, inputTxClosingBalance, exitor, counterParty, exitId }
+    // if (exitor) exitor = exitor.slice(12)
+    return { childToken, rootToken, inputTxClosingBalance, counterParty, exitId }
   }
 
   processExitTx(exit, inputTxClosingBalance, msgSender) {
@@ -143,38 +135,6 @@ class WithdrawManager {
       assert.ok(false, 'Exit tx type not supported')
     }
     return { _counterParty, exitAmount, burnt, token }
-  }
-
-  assertIncomingTransfer(eventSig) {
-    assert.ok(
-      eventSig.toString('hex') === 'e6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4',
-      'LOG_TRANSFER_EVENT_SIGNATURE_NOT_FOUND'
-    )
-  }
-
-  assertTransfer(eventSig) {
-    assert.ok(
-      eventSig.toString('hex') === 'e6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4',
-      'LOG_TRANSFER_EVENT_SIGNATURE_NOT_FOUND'
-    )
-  }
-
-  assertDeposit(eventSig) {
-    assert.ok(
-      eventSig.toString('hex') === '4e2ca0515ed1aef1395f66b5303bb5d6f1bf9d61a353fa53f73f8ac9973fa9f6',
-      'DEPOSIT_EVENT_SIGNATURE_NOT_FOUND'
-    )
-  }
-
-  assertBurn(eventSig, withdrawer, exitor) {
-    assert.ok(
-      eventSig.toString('hex') === 'ebff2602b3f468259e1e99f613fed6691f3a6526effe6ef3e768ba7ae7a36c4f',
-      'BURN_EVENT_SIGNATURE_NOT_FOUND'
-    )
-    assert.ok(
-      withdrawer.equals(exitor),
-      'Exitor is not the withdrawer of the input tx'
-    )
   }
 
   getAddressFromTx(tx) { // rlp decoded
@@ -259,4 +219,4 @@ class MerklePatriciaProof {
   }
 }
 
-module.exports = { WithdrawManager, TxType }
+module.exports = { WithdrawManager }

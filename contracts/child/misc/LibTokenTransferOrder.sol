@@ -1,4 +1,5 @@
-pragma solidity 0.5.2;
+// pragma solidity >=0.4.22 <0.6.0;
+pragma solidity >=0.5.2 <0.6.0;
 
 import { LibEIP712Domain } from "./EIP712.sol";
 
@@ -11,7 +12,7 @@ contract LibTokenTransferOrder is LibEIP712Domain {
     address spender;
     uint256 tokenIdOrAmount;
     bytes32 data;
-    uint256 expiration;
+    uint256 expiration; 
   }
 
   function getTokenTransferOrderHash(address spender, uint256 tokenIdOrAmount, bytes32 data, uint256 expiration)

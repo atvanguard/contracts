@@ -1,4 +1,5 @@
-pragma solidity ^0.5.2;
+pragma solidity >=0.5.2 <0.6.0;
+
 
 interface MarketplaceToken {
   function transferWithSig(bytes calldata sig, uint256 tokenIdOrAmount, bytes32 data, uint256 expiration, address to) external returns (address);
@@ -28,7 +29,6 @@ contract Marketplace {
       address2
     );
     emit DEBUG(token1, token2, _address1);
-
     // Transferring token2 from `address2` to `_address1`
     // address _address2 = MarketplaceToken(token2).transferWithSig(
     //   sig2,
@@ -38,6 +38,6 @@ contract Marketplace {
     //   _address1
     // );
 
-    // require(address2 == _address2, "Orders are not complimentary");
+    // require(address2 == _address2, "Executed orders are not complimentary");
   }
 }

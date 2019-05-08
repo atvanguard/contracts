@@ -7,8 +7,10 @@ const web3Child = new web3.constructor(
 )
 class Deployer {
   constructor() {
-    contracts.ChildChain.web3 = web3Child
-    contracts.ChildERC20.web3 = web3Child
+    // contracts.ChildChain.web3 = web3Child
+    // contracts.ChildERC20.web3 = web3Child
+    // contracts.ChildERC721.web3 = web3Child
+    // contracts.Marketplace.web3 = web3Child
   }
 
   async freshDeploy(options = {}) {
@@ -123,29 +125,80 @@ class Deployer {
     )
   }
 
-  async initializeChildChain(owner) {
+  async initializeChildChain(owner, options = { erc20: true }) {
     this.childChain = await contracts.ChildChain.new()
-    const rootERC20 = await this.deployTestErc20({ mapToken: false })
+    let res = { childChain: this.childChain }
+    if (options.erc20) {
+      const rootERC20 = await this.deployTestErc20({ mapToken: false })
+      const tx = await this.childChain.addToken(
+        owner,
+        rootERC20.address,
+        'ChildToken',
+        'CTOK',
+        18,
+        false /* isERC721 */
+      )
+      const NewTokenEvent = tx.logs.find(log => log.event == 'NewToken')
+      const childToken = await contracts.ChildERC20.at(NewTokenEvent.args.token)
+      await this.mapToken(
+        rootERC20.address,
+        childToken.address,
+        false /* isERC721 */
+      )
+      res.rootERC20 = rootERC20
+      res.childToken = childToken
+      // res = { ...res, rootERC20, childToken }
+    }
+    return res
+  }
+
+  async deployMarketplace() {
+    const marketplace = await contracts.Marketplace.new()
+    return marketplace
+  }
+
+  async deployErc20(owner) {
+    // TestToken auto-assigns 10000 to msg.sender
+    // const rootERC20 = await contracts.TestToken.new('TestToken', 'TST')
     const tx = await this.childChain.addToken(
       owner,
-      rootERC20.address,
-      'ChildToken',
-      'CTOK',
+      '0xc46EB8c1ea86bC8c24f26D9FdF9B76B300FFFE43', //rootERC20.address,
+      'childErc20',
+      'C20',
       18,
       false /* isERC721 */
     )
-    const NewTokenEvent = tx.logs.find(log => log.event == 'NewToken')
-    const childToken = await contracts.ChildERC20.at(NewTokenEvent.args.token)
-    await this.mapToken(
-      rootERC20.address,
-      childToken.address,
-      false /* isERC721 */
+    const NewTokenEvent = tx.logs.find(log => log.event === 'NewToken')
+    const childErc20 = await contracts.ChildERC20.at(NewTokenEvent.args.token)
+    // await this.mapToken(
+    //   rootERC20.address,
+    //   childErc20.address,
+    //   false /* isERC721 */
+    // )
+    // return { rootERC20, childErc20 }
+    return { childErc20 }
+  }
+
+  async deployErc721(owner) {
+    // const rootERC721 = await contracts.RootERC721.new('RootERC721', 'T721')
+    const tx = await this.childChain.addToken(
+      owner,
+      '0xaCF8eCcdcA12a0eB6Ae4Fb1431e26c44E66dECdb', //rootERC721.address,
+      'childErc721',
+      'C721',
+      18,
+      true /* isERC721 */
     )
-    return {
-      childChain: this.childChain,
-      rootERC20,
-      childToken
-    }
+    const NewTokenEvent = tx.logs.find(log => log.event === 'NewToken')
+    console.log('NewTokenEvent.args.token', NewTokenEvent.args.token)
+    const childErc721 = await contracts.ChildERC721.at(NewTokenEvent.args.token)
+    // await this.mapToken(
+    //   rootERC721.address,
+    //   childErc721.address,
+    //   true /* isERC721 */
+    // )
+    // return { rootERC721, childErc721 }
+    return { childErc721 }
   }
 }
 

@@ -1,4 +1,5 @@
-pragma solidity 0.5.2;
+// pragma solidity >=0.4.22 <0.6.0;
+pragma solidity >=0.5.2 <0.6.0;
 
 
 contract LibEIP712Domain {
@@ -12,8 +13,7 @@ contract LibEIP712Domain {
   bytes32 public EIP712_DOMAIN_HASH;
 
   constructor () public {
-    EIP712_DOMAIN_HASH = keccak256(
-      abi.encodePacked(
+    EIP712_DOMAIN_HASH = keccak256(abi.encode(
       EIP712_DOMAIN_SCHEMA_HASH,
       keccak256(bytes(EIP712_DOMAIN_NAME)),
       keccak256(bytes(EIP712_DOMAIN_VERSION)),
@@ -43,6 +43,7 @@ contract LibEIP712Domain {
       // Compute hash
       result := keccak256(memPtr, 66)
     }
-    return result;
+    return result; 
   }
 }
+
