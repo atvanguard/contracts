@@ -4,13 +4,14 @@ import * as contracts from './contracts.js'
 
 const web3Child = new web3.constructor(
   new web3.providers.HttpProvider('http://localhost:8546')
+  // new web3.providers.HttpProvider('http://alpha-mainnet-bp.matic.today/ ')
 )
 class Deployer {
   constructor() {
-    // contracts.ChildChain.web3 = web3Child
-    // contracts.ChildERC20.web3 = web3Child
-    // contracts.ChildERC721.web3 = web3Child
-    // contracts.Marketplace.web3 = web3Child
+    contracts.ChildChain.web3 = web3Child
+    contracts.ChildERC20.web3 = web3Child
+    contracts.ChildERC721.web3 = web3Child
+    contracts.Marketplace.web3 = web3Child
   }
 
   async freshDeploy(options = {}) {

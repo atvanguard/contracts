@@ -1,4 +1,4 @@
-pragma solidity ^0.5.2;
+pragma solidity 0.5.2;
 
 import { ERC20 } from "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import { ERC20Detailed } from "openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
@@ -88,25 +88,21 @@ contract ChildERC20 is ChildToken, ERC20, LibTokenTransferOrder, ERC20Detailed, 
     return true; // to be compliant with the standard ERC20.transfer
   }
 
+  event DEB(uint256 e, address f);
   function transferWithSig(bytes memory sig, uint256 amount, bytes32 data, uint256 expiration, address to) public returns (address) {
-    require(amount > 0, "0 amount");
+    require(amount > 0, "Can't transfer 0 amounts");
     require(expiration == 0 || block.number <= expiration, "Signature is expired");
-
     bytes32 dataHash = getTokenTransferOrderHash(
       msg.sender,
       amount,
       data,
       expiration
     );
-    emit DEBUG2(dataHash);
-    // require(disabledHashes[dataHash] == false, "Sig deactivated");
+    require(disabledHashes[dataHash] == false, "Sig deactivated");
     disabledHashes[dataHash] = true;
 
-    // recover address and send tokens
-    // address from = dataHash.ecrecovery(sig)
     address from = recover(dataHash, sig);
-    // _transferFrom(from, to, amount);
-
+    _transferFrom(from, to, amount);
     return from;
   }
 
@@ -128,5 +124,10 @@ contract ChildERC20 is ChildToken, ERC20, LibTokenTransferOrder, ERC20Detailed, 
       balanceOf(from),
       balanceOf(to)
     );
+  }
+
+  function yoyo() public returns (uint256) {
+    // emit DEB(55, msg.sender);
+    return 5;
   }
 }
