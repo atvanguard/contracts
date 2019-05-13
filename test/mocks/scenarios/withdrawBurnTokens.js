@@ -20,7 +20,7 @@ async function incomingTransferFullBurn() {
   const input = await build(incomingTransfer)
   const exit = await buildInFlight(burn)
   const msgSender = Buffer.from(burn.tx.from.slice(2), 'hex')
-  await withdrawManager.startExit(input, TxType.COUNTERPARTY_TRANSFER, exit, msgSender)
+  await withdrawManager.startExit(input, 1, exit, msgSender)
 }
 
 async function depositBurn() {
@@ -28,7 +28,7 @@ async function depositBurn() {
   const input = await build(deposit)
   const exit = await buildInFlight(depositBurnReceipt)
   const msgSender = Buffer.from(depositBurnReceipt.tx.from.slice(2), 'hex')
-  await withdrawManager.startExit(input, TxType.DEPOSIT, exit, msgSender)
+  await withdrawManager.startExit(input, 1, exit, msgSender)
 }
 
 async function transferPartialBurn() {
@@ -36,7 +36,7 @@ async function transferPartialBurn() {
   const input = await build(transfer)
   const exit = await buildInFlight(partialBurn)
   const msgSender = Buffer.from(partialBurn.tx.from.slice(2), 'hex')
-  await withdrawManager.startExit(input, TxType.TRANSFER, exit, msgSender)
+  await withdrawManager.startExit(input, 1, exit, msgSender)
 }
 
 function buildInFlight(event) {

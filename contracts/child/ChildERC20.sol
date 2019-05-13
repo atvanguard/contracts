@@ -1,14 +1,15 @@
-pragma solidity ^0.5.2;
+pragma solidity 0.5.2;
 
 import { ERC20 } from "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import { ERC20Detailed } from "openzeppelin-solidity/contracts/token/ERC20/ERC20Detailed.sol";
+import { ECRecover } from "./misc/ECRecover.sol";
 
 import "./ChildToken.sol";
 import "./misc/IParentToken.sol";
 import "./misc/LibTokenTransferOrder.sol";
 
 
-contract ChildERC20 is ChildToken, ERC20, LibTokenTransferOrder, ERC20Detailed {
+contract ChildERC20 is ChildToken, ERC20, LibTokenTransferOrder, ERC20Detailed, ECRecover {
   event LogTransfer(
     address indexed token,
     address indexed from,
@@ -73,6 +74,8 @@ contract ChildERC20 is ChildToken, ERC20, LibTokenTransferOrder, ERC20Detailed {
     emit Withdraw(token, user, amount, input, balanceOf(user));
   }
 
+  event DEBUG2(bytes32 dataHash);
+
   /// @dev Function that is called when a user or another contract wants to transfer funds.
   /// @param to Address of token receiver.
   /// @param value Number of tokens to transfer.
@@ -81,31 +84,14 @@ contract ChildERC20 is ChildToken, ERC20, LibTokenTransferOrder, ERC20Detailed {
     if (parent != address(0x0) && !IParentToken(parent).beforeTransfer(msg.sender, to, value)) {
       return false;
     }
-    uint256 input1 = balanceOf(msg.sender);
-    uint256 input2 = balanceOf(to);
-
-    // actual transfer
-    bool result = super.transfer(to, value);
-
-    // log balance
-    emit LogTransfer(
-      token,
-      msg.sender,
-      to,
-      value,
-      input1,
-      input2,
-      balanceOf(msg.sender),
-      balanceOf(to)
-    );
-
-    return result;
+    _transferFrom(msg.sender, to, value);
+    return true; // to be compliant with the standard ERC20.transfer
   }
 
+  event DEB(uint256 e, address f);
   function transferWithSig(bytes memory sig, uint256 amount, bytes32 data, uint256 expiration, address to) public returns (address) {
-    require(amount > 0);
+    require(amount > 0, "Can't transfer 0 amounts");
     require(expiration == 0 || block.number <= expiration, "Signature is expired");
-
     bytes32 dataHash = getTokenTransferOrderHash(
       msg.sender,
       amount,
@@ -115,26 +101,19 @@ contract ChildERC20 is ChildToken, ERC20, LibTokenTransferOrder, ERC20Detailed {
     require(disabledHashes[dataHash] == false, "Sig deactivated");
     disabledHashes[dataHash] = true;
 
-    // recover address and send tokens
-    address from = dataHash.ecrecovery(sig);
-    _transfer(from, to, amount);
-
+    address from = recover(dataHash, sig);
+    _transferFrom(from, to, amount);
     return from;
   }
 
-  /// @dev Allows allowed third party to transfer tokens from one address to another. Returns success.
   /// @param from Address from where tokens are withdrawn.
   /// @param to Address to where tokens are sent.
   /// @param value Number of tokens to transfer.
   /// @return Returns success of function call.
-  function transferFrom(address from, address to, uint256 value) public returns (bool) {
+  function _transferFrom(address from, address to, uint256 value) internal {
     uint256 input1 = balanceOf(from);
     uint256 input2 = balanceOf(to);
-
-    // actual transfer
-    bool result = super.transferFrom(from, to, value);
-
-    // log balance
+    _transfer(from, to, value);
     emit LogTransfer(
       token,
       from,
@@ -145,7 +124,10 @@ contract ChildERC20 is ChildToken, ERC20, LibTokenTransferOrder, ERC20Detailed {
       balanceOf(from),
       balanceOf(to)
     );
+  }
 
-    return result;
+  function yoyo() public returns (uint256) {
+    // emit DEB(55, msg.sender);
+    return 5;
   }
 }

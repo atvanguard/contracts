@@ -15,3 +15,6 @@ export const ExitNFT = artifacts.require('ExitNFT.sol')
 // child chain
 export const ChildChain = artifacts.require('ChildChain')
 export const ChildERC20 = artifacts.require('ChildERC20')
+export const ChildERC721 = artifacts.require('ChildERC721')
+export const Marketplace = artifacts.require('Marketplace')
+// if you add a contract, change line 43 in log-decoder.js

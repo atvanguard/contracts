@@ -1,11 +1,12 @@
-pragma solidity ^0.5.2;
+pragma solidity 0.5.2;
 
-interface MarketplaceToken {
-  function transferWithSig(bytes calldata sig, uint256 tokenIdOrAmount, bytes32 data, uint256 expiration, address to) external returns (address);
-}
-
+import "../ChildERC20.sol";
 
 contract Marketplace {
+
+  event DEBUG(address a, uint256 d, address b, uint256 e, address c);
+  event DEBUG2(uint256 a, bytes32 d, uint256 e);
+
   function executeOrder(
     address token1,
     bytes memory sig1,
@@ -19,16 +20,20 @@ contract Marketplace {
     uint256 expiration,
     address address2 // address of second participant
   ) public {
-    // Transferring token1 tokens from `address1` to `msg.sender`
-    address _address1 = MarketplaceToken(token1).transferWithSig(
+    // emit DEBUG(token1, tokenIdOrAmount1, token2, tokenIdOrAmount2, address2);
+    // uint256 x = ChildERC20(token1).yoyo();
+    // emit DEBUG2(tokenIdOrAmount1, keccak256(abi.encodePacked(orderId, token2, tokenIdOrAmount2)), expiration);
+
+    // Transferring token1 tokens from `_address1` to `address2`
+    ChildERC20(token1).transferWithSig(
       sig1,
       tokenIdOrAmount1,
       keccak256(abi.encodePacked(orderId, token2, tokenIdOrAmount2)),
       expiration,
       address2
     );
-
-    // Transferring token2 from `msg.sender` to `msg.sender`
+    
+    // Transferring token2 from `address2` to `_address1`
     address _address2 = MarketplaceToken(token2).transferWithSig(
       sig2,
       tokenIdOrAmount2,
@@ -36,7 +41,8 @@ contract Marketplace {
       expiration,
       _address1
     );
+    // emit DEBUG(msg.sender, address2, _address2);
 
-    require(address2 == _address2);
+    require(address2 == _address2, "Executed orders are not complimentary");
   }
 }
