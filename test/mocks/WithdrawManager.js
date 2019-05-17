@@ -16,9 +16,7 @@ const getBlockHeader = require('../helpers/blocks').getBlockHeader
 const HEADER_BLOCK_NUMBER_WEIGHT = new BN('10').pow(new BN('3'))
 const WITHDRAW_BLOCK_NUMBER_WEIGHT = new BN('10').pow(new BN('2'))
 const TX_INDEX_WEIGHT = new BN('10').pow(new BN('1'))
-console.log(
-  utils.keccak256('withdraw(uint256)').slice(0, 4)
-)
+
 class WithdrawManager {
   constructor(rootChain, registry, options) {
     this.rootChain = rootChain
