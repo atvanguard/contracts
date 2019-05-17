@@ -16,7 +16,9 @@ const getBlockHeader = require('../helpers/blocks').getBlockHeader
 const HEADER_BLOCK_NUMBER_WEIGHT = new BN('10').pow(new BN('3'))
 const WITHDRAW_BLOCK_NUMBER_WEIGHT = new BN('10').pow(new BN('2'))
 const TX_INDEX_WEIGHT = new BN('10').pow(new BN('1'))
-
+console.log(
+  utils.keccak256('withdraw(uint256)').slice(0, 4)
+)
 class WithdrawManager {
   constructor(rootChain, registry, options) {
     this.rootChain = rootChain
@@ -29,7 +31,7 @@ class WithdrawManager {
 
   async startExit(input, logIndex, counterParty, exit, msgSender, _counterParty) {
     let participant = counterParty || msgSender
-    const { childToken, rootToken, inputTxClosingBalance, exitId } = this.processReferenceTx(input, logIndex, participant)
+    const { childToken, rootToken, inputTxClosingBalance, exitId } = this.processReferenceTx(input, logIndex, participant, options)
     let tx
     let burnt = false
     if (_counterParty) {
@@ -55,6 +57,7 @@ class WithdrawManager {
     const inputData = inputItems[2] // "data" field in the receipt
     // inputItems[i] refers to i-th (0-based) topic in the topics array
     inputItems = inputItems[1]
+    console.log('inputItems', inputItems)
     const rootToken = inputItems[1].slice(12)
 
     let inputTxClosingBalance
@@ -100,7 +103,7 @@ class WithdrawManager {
     } else {
       assert.ok(false, 'Exit type not supported')
     }
-    const exitId = this.getExitId(input.header.number, input.number, input.path, 0)
+    const exitId = this.getExitId(options.number, input.number, input.path, 0)
     // if (exitor) exitor = exitor.slice(12)
     return { childToken, rootToken, inputTxClosingBalance, exitId }
   }
@@ -169,8 +172,8 @@ class WithdrawManager {
   }
 
   verifyReceiptAndTx(input) {
-    let { header, receipt, path, receiptParentNodes, number, timestamp, transactionsRoot, receiptsRoot, proof, tx, txParentNodes } = input
-    // console.log({ header, receipt, path, receiptParentNodes, number, timestamp, transactionsRoot, receiptsRoot, proof, tx, txParentNodes })
+    // input = utils.rlp.decode(input)
+    const { headerNumber, receipt, receiptParentNodes, tx, txParentNodes, path, number, timestamp, transactionsRoot, receiptsRoot, proof, options } = input
     const decodedReceipt = utils.rlp.decode(receipt)
     assert.ok(
       MerklePatriciaProof.verify(decodedReceipt, path, receiptParentNodes, receiptsRoot),
@@ -182,11 +185,12 @@ class WithdrawManager {
       'txProof failed'
     )
     const blockHeader = getBlockHeader({ number, timestamp, transactionsRoot, receiptsRoot })
+    // get start and root from rootChain.headers(headerNumber)
     assert.ok(
       new MerkleTree([blockHeader]).verify(
         blockHeader,
-        parseInt(number, 10) - parseInt(header.start, 10),
-        utils.toBuffer(header.root), // remove toBuffer
+        parseInt(number, 10) - parseInt(options.start, 10),
+        utils.toBuffer(options.root), // remove toBuffer
         proof
       ),
       'WITHDRAW_BLOCK_NOT_A_PART_OF_SUBMITTED_HEADER'
@@ -236,7 +240,7 @@ class WithdrawManager {
 
 class MerklePatriciaProof {
   static verify(value, path, parentNodes, root) {
-    console.log('in MerklePatriciaProof')
+    // console.log('in MerklePatriciaProof')
     // console.log({ value, path, parentNodes, root })
     return Proofs.verifyTxProof({ value, path, parentNodes, root })
   }

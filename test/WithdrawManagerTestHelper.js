@@ -77,7 +77,7 @@ contract('WithdrawManager', async function(accounts) {
   })
 
   describe('Marketplace', async function() {
-    const tokenId = '0xAED'
+    const tokenId = 5 //'0xAED'
     it.only('executeOrder', async function() {
       let depCount = 0
       contracts = await deployer.freshDeploy()
@@ -88,13 +88,17 @@ contract('WithdrawManager', async function(accounts) {
         childContracts.childChain, '0xc46EB8c1ea86bC8c24f26D9FdF9B76B300FFFE43', user,
         amount, depCount++, 'marketplace/depositErc20.js')
       await depositTokens(
-        childContracts.childChain, '0xaCF8eCcdcA12a0eB6Ae4Fb1431e26c44E66dECdb', other,
-        tokenId, depCount++, 'marketplace/depositErc721.js')
+        childContracts.childChain, '0xc46EB8c1ea86bC8c24f26D9FdF9B76B300FFFE43', other,
+        tokenId, depCount++, 'marketplace/depositErc20CounterParty.js')
+      // for ERC721
+      // await depositTokens(
+      //   childContracts.childChain, '0xaCF8eCcdcA12a0eB6Ae4Fb1431e26c44E66dECdb', other,
+      //   tokenId, depCount++, 'marketplace/depositErc721.js')
       const marketplace = await deployer.deployMarketplace()
       // let token1 = await _contracts.ChildERC20.at('0x35D886684ddEA239416960b648A1B78b2a62C3d7')
       // let token2 = await _contracts.ChildERC721.at('0x3d6F2EAE4A075558B3De4ecbB6FF5dA9B8e5be01')
       // let marketplace = await _contracts.Marketplace.at('0x26D2f2Dcf4Bf39C504812a6468d401a5d577EEB4')
-      console.log(token1.address, token2.address, marketplace.address)
+      // console.log(token1.address, token2.address, marketplace.address)
       const privateKey1 = '0x9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3'
       const privateKey2 = '0xc8deb0bea5c41afe8e37b4d1bd84e31adff11b09c8c96ff4b605003cce067cd9'
       const orderId = '0x468fc9c005382579139846222b7b0aebc9182ba073b2455938a86d9753bfb078'
