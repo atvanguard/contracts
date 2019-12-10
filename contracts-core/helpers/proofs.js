@@ -182,5 +182,6 @@ module.exports = {
   getTxProof,
   getTxBytes,
   getReceiptProof,
-  getReceiptBytes
+  getReceiptBytes,
+  getBlockHeader
 }
