@@ -118,7 +118,8 @@ const libDeps = [
 
 module.exports = async function(deployer) {
   if (!process.env.HEIMDALL_ID) {
-    throw new Error('Please export HEIMDALL_ID environment variable')
+    console.log('HEIMDALL_ID is not set; defaulting to heimdall-P5rXwg')
+    process.env.HEIMDALL_ID = 'heimdall-P5rXwg'
   }
 
   deployer.then(async() => {

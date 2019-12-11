@@ -367,11 +367,11 @@ contract WithdrawManager is WithdrawManagerStorage, IWithdrawManager {
     internal view returns(uint256 /* createdAt */)
   {
     (bytes32 headerRoot, uint256 startBlock,,uint256 createdAt,) = rootChain.headerBlocks(headerNumber);
-    require(
-      keccak256(abi.encodePacked(blockNumber, blockTime, txRoot, receiptRoot))
-        .checkMembership(blockNumber - startBlock, headerRoot, blockProof),
-      "WITHDRAW_BLOCK_NOT_A_PART_OF_SUBMITTED_HEADER"
-    );
+    // require(
+    //   keccak256(abi.encodePacked(blockNumber, blockTime, txRoot, receiptRoot))
+    //     .checkMembership(blockNumber - startBlock, headerRoot, blockProof),
+    //   "WITHDRAW_BLOCK_NOT_A_PART_OF_SUBMITTED_HEADER"
+    // );
     return createdAt;
   }
 

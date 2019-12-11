@@ -21,7 +21,7 @@ module.exports = {
     },
     matic_dev: {
       host: 'localhost',
-      port: 8546,
+      port: 8547,
       network_id: '*' // match any network
     },
     ropsten: {
