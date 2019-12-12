@@ -153,6 +153,17 @@ contract WithdrawManager is WithdrawManagerStorage, IWithdrawManager {
     return DepositManager(address(uint160(registry.getDepositManagerAddress())));
   }
 
+  function addExitToQueue(uint256 priority, address exitor) external {
+    address rootToken;
+    uint256 exitId = priority << 1;
+    exits[exitId] = PlasmaExit(0, bytes32(0), exitor, rootToken, false /* isRegularExit */, msg.sender /* predicate */);
+    PlasmaExit storage _exitObject = exits[exitId];
+    PriorityQueue queue = PriorityQueue(exitsQueues[rootToken]);
+    queue.insert(exitId >> 128, uint256(uint128(exitId)));
+    // create exit nft
+    exitNft.mint(exitor, exitId);
+  }
+
   function addExitToQueue(
     address exitor,
     address childToken,
