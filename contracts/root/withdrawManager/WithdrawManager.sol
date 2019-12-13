@@ -153,15 +153,18 @@ contract WithdrawManager is WithdrawManagerStorage, IWithdrawManager {
     return DepositManager(address(uint160(registry.getDepositManagerAddress())));
   }
 
-  function addExitToQueue(uint256 priority, address exitor) external {
-    address rootToken;
+  function addExitToQueue(uint256 priority, address exitor, address rootToken)
+    external
+    checkPredicateAndTokenMapping(rootToken)
+{
     uint256 exitId = priority << 1;
-    exits[exitId] = PlasmaExit(0, bytes32(0), exitor, rootToken, false /* isRegularExit */, msg.sender /* predicate */);
+    exits[exitId] = PlasmaExit(0 /* exitAmountOrTokenId */, bytes32(0), exitor, rootToken, false /* isRegularExit */, msg.sender /* predicate */);
     PlasmaExit storage _exitObject = exits[exitId];
     PriorityQueue queue = PriorityQueue(exitsQueues[rootToken]);
     queue.insert(exitId >> 128, uint256(uint128(exitId)));
     // create exit nft
     exitNft.mint(exitor, exitId);
+    emit ExitStarted(exitor, exitId, rootToken, 0 /* exitAmountOrTokenId */, false /* isRegularExit */);
   }
 
   function addExitToQueue(
@@ -387,6 +390,7 @@ contract WithdrawManager is WithdrawManagerStorage, IWithdrawManager {
   }
 
   function getExitableAt(uint256 createdAt) internal view returns (uint256) {
-    return Math.max(createdAt + 2 * HALF_EXIT_PERIOD, now + HALF_EXIT_PERIOD);
+    // return Math.max(createdAt + 2 * HALF_EXIT_PERIOD, now + HALF_EXIT_PERIOD);
+    return now;
   }
 }
