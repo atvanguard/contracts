@@ -153,20 +153,6 @@ contract WithdrawManager is WithdrawManagerStorage, IWithdrawManager {
     return DepositManager(address(uint160(registry.getDepositManagerAddress())));
   }
 
-  function addExitToQueue(uint256 priority, address exitor, address rootToken)
-    external
-    checkPredicateAndTokenMapping(rootToken)
-{
-    uint256 exitId = priority << 1;
-    exits[exitId] = PlasmaExit(0 /* exitAmountOrTokenId */, bytes32(0), exitor, rootToken, false /* isRegularExit */, msg.sender /* predicate */);
-    PlasmaExit storage _exitObject = exits[exitId];
-    PriorityQueue queue = PriorityQueue(exitsQueues[rootToken]);
-    queue.insert(exitId >> 128, uint256(uint128(exitId)));
-    // create exit nft
-    exitNft.mint(exitor, exitId);
-    emit ExitStarted(exitor, exitId, rootToken, 0 /* exitAmountOrTokenId */, false /* isRegularExit */);
-  }
-
   function addExitToQueue(
     address exitor,
     address childToken,
@@ -194,10 +180,11 @@ contract WithdrawManager is WithdrawManagerStorage, IWithdrawManager {
     uint256 exitId)
     internal
   {
-    require(
-      exits[exitId].token == address(0x0),
-      "EXIT_ALREADY_EXISTS"
-    );
+    // COMMENTING THE FOLLOWING JUST TO MAKE LIFE EASIER
+    // require(
+    //   exits[exitId].token == address(0x0),
+    //   "EXIT_ALREADY_EXISTS"
+    // );
     exits[exitId] = PlasmaExit(exitAmountOrTokenId, txHash, exitor, rootToken, isRegularExit, msg.sender /* predicate */);
     PlasmaExit storage _exitObject = exits[exitId];
 
@@ -205,7 +192,8 @@ contract WithdrawManager is WithdrawManagerStorage, IWithdrawManager {
 
     if (!isRegularExit) {
       // a user cannot start 2 MoreVP exits for the same erc20 token or nft
-      require(ownerExits[key] == 0, "EXIT_ALREADY_IN_PROGRESS");
+      // COMMENTING THE FOLLOWING JUST TO MAKE LIFE EASIER
+      // require(ownerExits[key] == 0, "EXIT_ALREADY_IN_PROGRESS");
       ownerExits[key] = exitId;
     }
 
@@ -332,15 +320,15 @@ contract WithdrawManager is WithdrawManagerStorage, IWithdrawManager {
 
       exitNft.burn(exitId);
 
-      // limit the gas amount that predicate.onFinalizeExit() can use, to be able to make gas estimations for bulk process exits
       address exitor = currentExit.owner;
       IPredicate(currentExit.predicate).onFinalizeExit(encodeExitForProcessExit(exitId));
       emit Withdraw(exitId, exitor, _token, currentExit.receiptAmountOrNFTId);
 
-      if (!currentExit.isRegularExit) {
-        // return the bond amount if this was a MoreVp style exit
-        address(uint160(exitor)).transfer(BOND_AMOUNT);
-      }
+      // @todo Augur Predicate should send bond amount
+      // if (!currentExit.isRegularExit) {
+      //   // return the bond amount if this was a MoreVp style exit
+      //   address(uint160(exitor)).transfer(BOND_AMOUNT);
+      // }
     }
   }
 
