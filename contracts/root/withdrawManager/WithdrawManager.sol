@@ -267,7 +267,7 @@ contract WithdrawManager is WithdrawManagerStorage, IWithdrawManager {
     ExitNFT(exitNft).burn(exitId);
 
     // Send bond amount to challenger
-    msg.sender.transfer(BOND_AMOUNT);
+    // msg.sender.transfer(BOND_AMOUNT); @todo uncomment later
 
     // delete exits[exitId];
     emit ExitCancelled(exitId);
